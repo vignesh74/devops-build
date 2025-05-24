@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  react-app:
+    image: react-devops-build
+    build: .
+    ports:
+      - "80:80"
+
