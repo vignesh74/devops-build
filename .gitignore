@@ -1,5 +1,7 @@
-node_modules/
-build/
+# .gitignore
+node_modules
 .env
+build
 .DS_Store
+*.pem
 

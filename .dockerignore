@@ -1,9 +1,9 @@
+# .dockerignore
 node_modules
+Dockerfile*
 .git
 .gitignore
-Dockerfile
-Dockerfile.jenkins
-.env
-.dockerignore
 README.md
+*.pem
+.env
 
