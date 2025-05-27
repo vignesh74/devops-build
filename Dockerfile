@@ -1,11 +1,18 @@
-# Use Nginx to serve static files
+# Use official Node image to build the React app
+FROM node:20 AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+# Use nginx to serve the build folder
 FROM nginx:alpine
 
-# Remove default nginx index page
-RUN rm -rf /usr/share/nginx/html/*
-
-# Copy pre-built React files from local 'build/' folder
-COPY build/ /usr/share/nginx/html
+COPY --from=build /app/build /usr/share/nginx/html
 
 EXPOSE 80
 
