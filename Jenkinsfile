@@ -78,9 +78,18 @@ pipeline {
           sh """
             ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} '
               echo "🛑 Stopping container if running: ${CONTAINER_NAME}" &&
-              sudo docker ps -q -f name=${CONTAINER_NAME} | grep -q . && sudo docker stop ${CONTAINER_NAME} || echo "Container not running, skipping stop." &&
+              if sudo docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
+                sudo docker stop ${CONTAINER_NAME}
+              else
+                echo "Container not running, skipping stop."
+              fi &&
+
               echo "🗑️ Removing container if exists: ${CONTAINER_NAME}" &&
-              sudo docker ps -aq -f name=${CONTAINER_NAME} | grep -q . && sudo docker rm ${CONTAINER_NAME} || echo "No container to remove." &&
+              if sudo docker ps -aq -f name=${CONTAINER_NAME} | grep -q .; then
+                sudo docker rm ${CONTAINER_NAME}
+              else
+                echo "No container to remove."
+              fi &&
 
               echo "⚠️ Checking for processes using port ${HOST_PORT}..." &&
               PORT_IN_USE_PID=\\\$(sudo lsof -t -i :${HOST_PORT} || true) &&
@@ -93,8 +102,10 @@ pipeline {
 
               echo "⬇️ Pulling image: ${FULL_IMAGE}" &&
               sudo docker pull ${FULL_IMAGE} &&
+
               echo "▶️ Starting container: ${CONTAINER_NAME}" &&
               sudo docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} ${FULL_IMAGE} &&
+
               echo "✅ Deployment complete for container: ${CONTAINER_NAME}"
             '
           """
