@@ -61,13 +61,16 @@ pipeline {
       }
     }
 
-    stage('Test SSH Connection') {
+   stage('Test SSH Connection') {
   steps {
-    sshagent(credentials: ['vigourousvigSSH']) {
-      sh 'ssh -o StrictHostKeyChecking=no ubuntu@' + "${EC2_HOST}" + ' "echo ✅ SSH to EC2 works!"'
+    script {
+      sshagent(credentials: ['vigourousvigSSH']) {
+        sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+      }
     }
   }
 }
+
 
     stage('Deploy to EC2') {
       steps {
