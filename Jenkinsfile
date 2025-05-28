@@ -61,26 +61,24 @@ pipeline {
       }
     }
 
-   stage('Test SSH Connection') {
-  steps {
-    script {
-      sshagent(credentials: ['vigourousvigSSH']) {
-        sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+    stage('Test SSH Connection') {
+      steps {
+        script {
+          sshagent(credentials: ['vigourousvigSSH']) {
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+          }
+        }
       }
     }
-  }
-}
-
 
     stage('Deploy to EC2') {
       steps {
         sshagent([SSH_CREDENTIALS_ID]) {
           sh """
-            ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} << EOF
-              docker rm -f ${env.CONTAINER_NAME} || true
-              docker pull ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-              docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:${env.CONTAINER_PORT} ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-            EOF
+            ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} \\
+              "docker rm -f ${env.CONTAINER_NAME} || true && \\
+               docker pull ${env.IMAGE_NAME}:${env.IMAGE_TAG} && \\
+               docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:${env.CONTAINER_PORT} ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
           """
         }
       }
@@ -96,5 +94,3 @@ pipeline {
     }
   }
 }
-
-
