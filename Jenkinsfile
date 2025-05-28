@@ -81,6 +81,16 @@ pipeline {
               docker stop ${CONTAINER_NAME} || echo "Container not running, skipping stop." &&
               echo "🗑️ Removing container if exists: ${CONTAINER_NAME}" &&
               docker rm ${CONTAINER_NAME} || echo "No container to remove." &&
+
+              echo "⚠️ Checking for processes using port ${HOST_PORT}..." &&
+              PORT_IN_USE_PID=\$(sudo lsof -t -i :${HOST_PORT} || true) &&
+              if [ ! -z "\$PORT_IN_USE_PID" ]; then
+                echo "⚠️ Port ${HOST_PORT} in use by PID(s): \$PORT_IN_USE_PID. Killing process(es)..." &&
+                sudo kill -9 \$PORT_IN_USE_PID || echo "Failed to kill process(es) on port ${HOST_PORT}."
+              else
+                echo "Port ${HOST_PORT} is free."
+              fi &&
+
               echo "⬇️ Pulling image: ${FULL_IMAGE}" &&
               docker pull ${FULL_IMAGE} &&
               echo "▶️ Starting container: ${CONTAINER_NAME}" &&
