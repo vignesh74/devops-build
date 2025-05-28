@@ -18,10 +18,8 @@ pipeline {
     stage('Set Variables') {
       steps {
         script {
-          // Detect current branch
           def branch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceFirst(/^origin\//, '') ?: 'dev'
 
-          // Set environment variables based on the branch
           if (branch == 'master') {
             env.IMAGE_NAME = 'vigourousvig/prod'
             env.IMAGE_TAG = 'prod'
@@ -79,9 +77,15 @@ pipeline {
         sshagent([SSH_CREDENTIALS_ID]) {
           sh """
             ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} '
-              docker rm -f ${CONTAINER_NAME} || true &&
+              echo "🛑 Stopping container if exists: ${CONTAINER_NAME}" &&
+              docker stop ${CONTAINER_NAME} || echo "Container not running, skipping stop." &&
+              echo "🗑️ Removing container if exists: ${CONTAINER_NAME}" &&
+              docker rm ${CONTAINER_NAME} || echo "No container to remove." &&
+              echo "⬇️ Pulling image: ${FULL_IMAGE}" &&
               docker pull ${FULL_IMAGE} &&
-              docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} ${FULL_IMAGE}
+              echo "▶️ Starting container: ${CONTAINER_NAME}" &&
+              docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} ${FULL_IMAGE} &&
+              echo "✅ Deployment complete for container: ${CONTAINER_NAME}"
             '
           """
         }
