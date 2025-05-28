@@ -62,22 +62,25 @@ pipeline {
             steps {
                 sshagent(['vigourousvigSSH']) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} \"
-                            echo '🛑 Checking and stopping existing container on port 80...' &&
-                            CONTAINER_ID=\\\$(docker ps -q --filter 'publish=80') &&
-                            if [ ! -z \\\$CONTAINER_ID ]; then
-                                echo '🔍 Port 80 is in use by container: \\\$CONTAINER_ID' &&
-                                docker stop \\\$CONTAINER_ID &&
-                                docker rm \\\$CONTAINER_ID;
+                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} << 'EOF'
+                            echo '🛑 Checking for existing container named ${env.CONTAINER_NAME}...'
+                            if [ \$(docker ps -a -q -f name=${env.CONTAINER_NAME}) ]; then
+                                echo '🔍 Found existing container. Removing it...'
+                                docker stop ${env.CONTAINER_NAME}
+                                docker rm ${env.CONTAINER_NAME}
+                                echo '✅ Old container removed.'
                             else
-                                echo '✅ Port 80 is free.';
-                            fi &&
-                            echo '⬇️ Pulling latest image...' &&
-                            docker pull ${env.IMAGE_NAME} &&
-                            echo '🚀 Running new container...' &&
-                            docker run -d --name ${env.CONTAINER_NAME} -p 80:80 ${env.IMAGE_NAME} &&
+                                echo '✅ No existing container with name ${env.CONTAINER_NAME}.'
+                            fi
+
+                            echo '⬇️ Pulling latest image...'
+                            docker pull ${env.IMAGE_NAME}
+
+                            echo '🚀 Running new container...'
+                            docker run -d --name ${env.CONTAINER_NAME} -p 80:80 ${env.IMAGE_NAME}
+
                             echo '✅ Deployment complete!'
-                        \"
+EOF
                     """
                 }
             }
