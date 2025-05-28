@@ -4,9 +4,6 @@ pipeline {
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('vigourousvigDocker')
         SSH_CREDENTIALS = credentials('vigourousvigSSH')
-        BRANCH_NAME = "${env.BRANCH_NAME}"
-        IMAGE_NAME = (BRANCH_NAME == 'master') ? 'vigourousvig/prod:prod' : 'vigourousvig/dev:dev'
-        CONTAINER_NAME = (BRANCH_NAME == 'master') ? 'react-prod' : 'react-dev'
         HOST_PORT = "80"
         EC2_HOST = "15.207.86.242"
     }
@@ -21,12 +18,16 @@ pipeline {
         stage('Set Variables') {
             steps {
                 script {
+                    env.BRANCH_NAME = env.BRANCH_NAME
+                    env.IMAGE_NAME = (env.BRANCH_NAME == 'master') ? 'vigourousvig/prod:prod' : 'vigourousvig/dev:dev'
+                    env.CONTAINER_NAME = (env.BRANCH_NAME == 'master') ? 'react-prod' : 'react-dev'
+
                     echo """
-                    🔧 Branch: ${BRANCH_NAME}
-                    🐳 Docker Image: ${IMAGE_NAME}
-                    📦 Container Name: ${CONTAINER_NAME}
-                    🌐 Host Port: ${HOST_PORT}
-                    📡 EC2 Host: ${EC2_HOST}
+                    🔧 Branch: ${env.BRANCH_NAME}
+                    🐳 Docker Image: ${env.IMAGE_NAME}
+                    📦 Container Name: ${env.CONTAINER_NAME}
+                    🌐 Host Port: ${env.HOST_PORT}
+                    📡 EC2 Host: ${env.EC2_HOST}
                     """
                 }
             }
@@ -34,7 +35,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME} ."
+                sh "docker build -t ${env.IMAGE_NAME} ."
             }
         }
 
@@ -43,7 +44,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'vigourousvigDocker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker push ${IMAGE_NAME}
+                        docker push ${env.IMAGE_NAME}
                     """
                 }
             }
@@ -52,7 +53,7 @@ pipeline {
         stage('Test SSH Connection') {
             steps {
                 sshagent(['vigourousvigSSH']) {
-                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} 'echo ✅ SSH to EC2 works!'"
                 }
             }
         }
@@ -61,7 +62,7 @@ pipeline {
             steps {
                 sshagent(['vigourousvigSSH']) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} \"
+                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} \"
                             echo '🛑 Checking and stopping existing container on port 80...' &&
                             CONTAINER_ID=\\\$(docker ps -q --filter 'publish=80') &&
                             if [ ! -z \\\$CONTAINER_ID ]; then
@@ -72,9 +73,9 @@ pipeline {
                                 echo '✅ Port 80 is free.';
                             fi &&
                             echo '⬇️ Pulling latest image...' &&
-                            docker pull ${IMAGE_NAME} &&
+                            docker pull ${env.IMAGE_NAME} &&
                             echo '🚀 Running new container...' &&
-                            docker run -d --name ${CONTAINER_NAME} -p 80:80 ${IMAGE_NAME} &&
+                            docker run -d --name ${env.CONTAINER_NAME} -p 80:80 ${env.IMAGE_NAME} &&
                             echo '✅ Deployment complete!'
                         \"
                     """
@@ -85,10 +86,10 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed for branch: ${BRANCH_NAME}"
+            echo "❌ Deployment failed for branch: ${env.BRANCH_NAME}"
         }
         success {
-            echo "✅ Deployment succeeded for branch: ${BRANCH_NAME}"
+            echo "✅ Deployment succeeded for branch: ${env.BRANCH_NAME}"
         }
     }
 }
