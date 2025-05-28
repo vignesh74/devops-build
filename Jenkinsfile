@@ -18,7 +18,6 @@ pipeline {
         stage('Set Variables') {
             steps {
                 script {
-                    env.BRANCH_NAME = env.BRANCH_NAME
                     env.IMAGE_NAME = (env.BRANCH_NAME == 'master') ? 'vigourousvig/prod:prod' : 'vigourousvig/dev:dev'
                     env.CONTAINER_NAME = (env.BRANCH_NAME == 'master') ? 'react-prod' : 'react-dev'
 
@@ -62,7 +61,7 @@ pipeline {
             steps {
                 sshagent(['vigourousvigSSH']) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} << 'EOF'
+                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} << EOF
                             echo '🛑 Checking for existing container named ${env.CONTAINER_NAME}...'
                             if [ \$(docker ps -a -q -f name=${env.CONTAINER_NAME}) ]; then
                                 echo '🔍 Found existing container. Removing it...'
@@ -77,7 +76,7 @@ pipeline {
                             docker pull ${env.IMAGE_NAME}
 
                             echo '🚀 Running new container...'
-                            docker run -d --name ${env.CONTAINER_NAME} -p 80:80 ${env.IMAGE_NAME}
+                            docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:80 ${env.IMAGE_NAME}
 
                             echo '✅ Deployment complete!'
 EOF
