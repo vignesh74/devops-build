@@ -2,8 +2,9 @@ pipeline {
   agent any
 
   environment {
-    DOCKERHUB_CREDENTIALS = credentials('vigourousvigDocker')
-    SSH_CREDENTIALS = credentials('vigourousvigSSH')
+    DOCKER_CREDENTIALS_ID = 'vigourousvigDocker'
+    SSH_CREDENTIALS_ID = 'vigourousvigSSH'
+    EC2_HOST = '15.207.86.242'
   }
 
   stages {
@@ -16,10 +17,9 @@ pipeline {
     stage('Set Variables') {
       steps {
         script {
-          // Normalize branch name (handle both env.GIT_BRANCH and env.BRANCH_NAME)
-          def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceAll('origin/', '') ?: 'dev'
+          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceAll('origin/', '') ?: 'dev'
 
-          if (branchName == 'master') {
+          if (branch == 'master') {
             env.IMAGE_NAME = 'vigourousvig/prod'
             env.IMAGE_TAG = 'prod'
             env.CONTAINER_NAME = 'react-prod'
@@ -31,43 +31,53 @@ pipeline {
             env.HOST_PORT = '3000'
           }
 
-          env.EC2_HOST = '3.109.32.221'  // Your EC2 IP
+          env.CONTAINER_PORT = '80'
 
-          echo "🚀 Branch: ${branchName}"
-          echo "📦 Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-          echo "📦 Container: ${env.CONTAINER_NAME}"
-          echo "🌐 EC2 Host: ${env.EC2_HOST} (Port: ${env.HOST_PORT})"
+          echo "Branch: ${branch}"
+          echo "Docker Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+          echo "Container Name: ${env.CONTAINER_NAME}"
+          echo "Host Port: ${env.HOST_PORT}"
+          echo "Deploying to EC2 Host: ${EC2_HOST}"
         }
       }
     }
 
-    stage('Docker Build & Push') {
+    stage('Build Docker Image') {
       steps {
         script {
+          docker.build("${env.IMAGE_NAME}:${env.IMAGE_TAG}")
+        }
+      }
+    }
+
+    stage('Push Docker Image') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh """
-            docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} .
-            echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
             docker push ${env.IMAGE_NAME}:${env.IMAGE_TAG}
           """
         }
       }
     }
 
+    stage('Test SSH Connection') {
+      steps {
+        sshagent([SSH_CREDENTIALS_ID]) {
+          sh 'ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "echo ✅ SSH to EC2 works!"'
+        }
+      }
+    }
+
     stage('Deploy to EC2') {
       steps {
-        script {
-          def remote = [
-            name: 'EC2',
-            host: env.EC2_HOST,
-            user: 'ubuntu',
-            identityFile: env.SSH_CREDENTIALS,
-            allowAnyHosts: true
-          ]
-
-          sshCommand remote: remote, command: """
-            docker rm -f ${env.CONTAINER_NAME} || true
-            docker pull ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-            docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:80 ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+        sshagent([SSH_CREDENTIALS_ID]) {
+          sh """
+            ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} << EOF
+              docker rm -f ${env.CONTAINER_NAME} || true
+              docker pull ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+              docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:${env.CONTAINER_PORT} ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+            EOF
           """
         }
       }
@@ -75,9 +85,13 @@ pipeline {
   }
 
   post {
-    always {
-      echo "✅ Pipeline completed for branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
+    success {
+      echo "✅ Deployment successful for branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
+    }
+    failure {
+      echo "❌ Deployment failed for branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
     }
   }
 }
+
 
