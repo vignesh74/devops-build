@@ -1,125 +1,94 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    DOCKER_CREDENTIALS_ID = 'vigourousvigDocker'
-    SSH_CREDENTIALS_ID = 'vigourousvigSSH'
-    EC2_HOST = '15.207.86.242'
-    CONTAINER_PORT = '80'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        DOCKER_HUB_CREDENTIALS = credentials('vigourousvigDocker')
+        SSH_CREDENTIALS = credentials('vigourousvigSSH')
+        BRANCH_NAME = "${env.BRANCH_NAME}"
+        IMAGE_NAME = (BRANCH_NAME == 'master') ? 'vigourousvig/prod:prod' : 'vigourousvig/dev:dev'
+        CONTAINER_NAME = (BRANCH_NAME == 'master') ? 'react-prod' : 'react-dev'
+        HOST_PORT = "80"
+        EC2_HOST = "15.207.86.242"
     }
 
-    stage('Set Variables') {
-      steps {
-        script {
-          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceFirst(/^origin\//, '') ?: 'dev'
-
-          if (branch == 'master') {
-            env.IMAGE_NAME = 'vigourousvig/prod'
-            env.IMAGE_TAG = 'prod'
-            env.CONTAINER_NAME = 'react-prod'
-            env.HOST_PORT = '80'
-          } else {
-            env.IMAGE_NAME = 'vigourousvig/dev'
-            env.IMAGE_TAG = 'latest'
-            env.CONTAINER_NAME = 'react-dev'
-            env.HOST_PORT = '3000'
-          }
-
-          env.FULL_IMAGE = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
-
-          echo """
-          🔧 Branch: ${branch}
-          🐳 Docker Image: ${env.FULL_IMAGE}
-          📦 Container Name: ${env.CONTAINER_NAME}
-          🌐 Host Port: ${env.HOST_PORT}
-          📡 EC2 Host: ${EC2_HOST}
-          """
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Build Docker Image') {
-      steps {
-        script {
-          docker.build(env.FULL_IMAGE)
+        stage('Set Variables') {
+            steps {
+                script {
+                    echo """
+                    🔧 Branch: ${BRANCH_NAME}
+                    🐳 Docker Image: ${IMAGE_NAME}
+                    📦 Container Name: ${CONTAINER_NAME}
+                    🌐 Host Port: ${HOST_PORT}
+                    📡 EC2 Host: ${EC2_HOST}
+                    """
+                }
+            }
         }
-      }
-    }
 
-    stage('Push Docker Image') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker push ${FULL_IMAGE}
-          '''
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME} ."
+            }
         }
-      }
-    }
 
-    stage('Test SSH Connection') {
-      steps {
-        sshagent([SSH_CREDENTIALS_ID]) {
-          sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'vigourousvigDocker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push ${IMAGE_NAME}
+                    """
+                }
+            }
         }
-      }
-    }
 
-    stage('Deploy to EC2') {
-      steps {
-        sshagent([SSH_CREDENTIALS_ID]) {
-          sh """
-            ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} '
-              echo "🛑 Stopping container if running: ${CONTAINER_NAME}" &&
-              if sudo docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
-                sudo docker stop ${CONTAINER_NAME}
-              else
-                echo "Container not running, skipping stop."
-              fi &&
-
-              echo "🗑️ Removing container if exists: ${CONTAINER_NAME}" &&
-              if sudo docker ps -aq -f name=${CONTAINER_NAME} | grep -q .; then
-                sudo docker rm ${CONTAINER_NAME}
-              else
-                echo "No container to remove."
-              fi &&
-
-              echo "⚠️ Checking for processes using port ${HOST_PORT}..." &&
-              PORT_IN_USE_PID=\\\$(sudo lsof -t -i :${HOST_PORT} || true) &&
-              if [ ! -z "\\\$PORT_IN_USE_PID" ]; then
-                echo "⚠️ Port ${HOST_PORT} in use by PID(s): \\\$PORT_IN_USE_PID. Killing process(es)..." &&
-                sudo kill -9 \\\$PORT_IN_USE_PID || echo "Failed to kill process(es) on port ${HOST_PORT}."
-              else
-                echo "Port ${HOST_PORT} is free."
-              fi &&
-
-              echo "⬇️ Pulling image: ${FULL_IMAGE}" &&
-              sudo docker pull ${FULL_IMAGE} &&
-
-              echo "▶️ Starting container: ${CONTAINER_NAME}" &&
-              sudo docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} ${FULL_IMAGE} &&
-
-              echo "✅ Deployment complete for container: ${CONTAINER_NAME}"
-            '
-          """
+        stage('Test SSH Connection') {
+            steps {
+                sshagent(['vigourousvigSSH']) {
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
+                }
+            }
         }
-      }
-    }
-  }
 
-  post {
-    success {
-      echo "✅ Deployment successful for branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
+        stage('Deploy to EC2') {
+            steps {
+                sshagent(['vigourousvigSSH']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} '
+                            echo "🛑 Checking and stopping existing container on port 80..." &&
+                            CONTAINER_ID=$(docker ps -q --filter "publish=80") &&
+                            if [ ! -z "$CONTAINER_ID" ]; then
+                                echo "🔍 Port 80 is in use by container: $CONTAINER_ID" &&
+                                docker stop $CONTAINER_ID &&
+                                docker rm $CONTAINER_ID;
+                            else
+                                echo "✅ Port 80 is free.";
+                            fi &&
+                            echo "⬇️ Pulling latest image..." &&
+                            docker pull ${IMAGE_NAME} &&
+                            echo "🚀 Running new container..." &&
+                            docker run -d --name ${CONTAINER_NAME} -p 80:80 ${IMAGE_NAME} &&
+                            echo "✅ Deployment complete!"
+                        '
+                    """
+                }
+            }
+        }
     }
-    failure {
-      echo "❌ Deployment failed for branch: ${env.BRANCH_NAME ?: env.GIT_BRANCH}"
+
+    post {
+        failure {
+            echo "❌ Deployment failed for branch: ${BRANCH_NAME}"
+        }
+        success {
+            echo "✅ Deployment succeeded for branch: ${BRANCH_NAME}"
+        }
     }
-  }
 }
