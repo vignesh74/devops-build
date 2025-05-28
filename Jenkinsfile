@@ -5,6 +5,7 @@ pipeline {
     DOCKER_CREDENTIALS_ID = 'vigourousvigDocker'
     SSH_CREDENTIALS_ID = 'vigourousvigSSH'
     EC2_HOST = '15.207.86.242'
+    CONTAINER_PORT = '80'
   }
 
   stages {
@@ -17,6 +18,7 @@ pipeline {
     stage('Set Variables') {
       steps {
         script {
+          // Determine current Git branch
           def branch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceAll('origin/', '') ?: 'dev'
 
           if (branch == 'master') {
@@ -31,10 +33,10 @@ pipeline {
             env.HOST_PORT = '3000'
           }
 
-          env.CONTAINER_PORT = '80'
+          env.FULL_IMAGE = "${env.IMAGE_NAME}:${env.IMAGE_TAG}"
 
           echo "Branch: ${branch}"
-          echo "Docker Image: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+          echo "Docker Image: ${env.FULL_IMAGE}"
           echo "Container Name: ${env.CONTAINER_NAME}"
           echo "Host Port: ${env.HOST_PORT}"
           echo "Deploying to EC2 Host: ${EC2_HOST}"
@@ -45,17 +47,17 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         script {
-          docker.build("${env.IMAGE_NAME}:${env.IMAGE_TAG}")
+          docker.build(env.FULL_IMAGE)
         }
       }
     }
 
     stage('Push Docker Image') {
       steps {
-        withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+        withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh """
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker push ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+            docker push ${env.FULL_IMAGE}
           """
         }
       }
@@ -63,10 +65,8 @@ pipeline {
 
     stage('Test SSH Connection') {
       steps {
-        script {
-          sshagent(credentials: ['vigourousvigSSH']) {
-            sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
-          }
+        sshagent([SSH_CREDENTIALS_ID]) {
+          sh "ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo ✅ SSH to EC2 works!'"
         }
       }
     }
@@ -77,8 +77,8 @@ pipeline {
           sh """
             ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} \\
               "docker rm -f ${env.CONTAINER_NAME} || true && \\
-               docker pull ${env.IMAGE_NAME}:${env.IMAGE_TAG} && \\
-               docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:${env.CONTAINER_PORT} ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+               docker pull ${env.FULL_IMAGE} && \\
+               docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:${env.CONTAINER_PORT} ${env.FULL_IMAGE}"
           """
         }
       }
