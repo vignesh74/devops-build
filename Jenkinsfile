@@ -42,7 +42,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'vigourousvigDocker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                         docker push ${IMAGE_NAME}
                     """
                 }
@@ -61,22 +61,22 @@ pipeline {
             steps {
                 sshagent(['vigourousvigSSH']) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} '
-                            echo "🛑 Checking and stopping existing container on port 80..." &&
-                            CONTAINER_ID=$(docker ps -q --filter "publish=80") &&
-                            if [ ! -z "$CONTAINER_ID" ]; then
-                                echo "🔍 Port 80 is in use by container: $CONTAINER_ID" &&
-                                docker stop $CONTAINER_ID &&
-                                docker rm $CONTAINER_ID;
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} \"
+                            echo '🛑 Checking and stopping existing container on port 80...' &&
+                            CONTAINER_ID=\\\$(docker ps -q --filter 'publish=80') &&
+                            if [ ! -z \\\$CONTAINER_ID ]; then
+                                echo '🔍 Port 80 is in use by container: \\\$CONTAINER_ID' &&
+                                docker stop \\\$CONTAINER_ID &&
+                                docker rm \\\$CONTAINER_ID;
                             else
-                                echo "✅ Port 80 is free.";
+                                echo '✅ Port 80 is free.';
                             fi &&
-                            echo "⬇️ Pulling latest image..." &&
+                            echo '⬇️ Pulling latest image...' &&
                             docker pull ${IMAGE_NAME} &&
-                            echo "🚀 Running new container..." &&
+                            echo '🚀 Running new container...' &&
                             docker run -d --name ${CONTAINER_NAME} -p 80:80 ${IMAGE_NAME} &&
-                            echo "✅ Deployment complete!"
-                        '
+                            echo '✅ Deployment complete!'
+                        \"
                     """
                 }
             }
