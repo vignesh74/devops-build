@@ -5,7 +5,7 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = credentials('vigourousvigDocker')
         SSH_CREDENTIALS = credentials('vigourousvigSSH')
         HOST_PORT = "80"
-        EC2_HOST = "15.207.86.242"
+        EC2_HOST = "43.205.239.244"
     }
 
     stages {
