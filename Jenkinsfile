@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS = credentials('vigourousvigDocker')
-        SSH_CREDENTIALS = credentials('vigourousvigSSH')
+        DOCKER_HUB_CREDENTIALS_ID = 'vigourousvigDocker'  // just the ID string here
+        SSH_CREDENTIALS_ID = 'vigourousvigSSH'            // just the ID string here
         HOST_PORT = "80"
         EC2_HOST = "3.6.86.248"
     }
@@ -40,7 +40,7 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${env.DOCKER_HUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_HUB_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
                         echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                         docker push ${env.IMAGE_NAME}
@@ -51,7 +51,7 @@ pipeline {
 
         stage('Test SSH Connection') {
             steps {
-                sshagent([env.SSH_CREDENTIALS]) {
+                sshagent([env.SSH_CREDENTIALS_ID]) {
                     sh "ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} 'echo ✅ SSH to EC2 works!'"
                 }
             }
@@ -59,24 +59,24 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                sshagent([env.SSH_CREDENTIALS]) {
+                sshagent([env.SSH_CREDENTIALS_ID]) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} << 'EOF'
-                            echo '🛑 Checking for existing container named ${CONTAINER_NAME}...'
-                            if docker ps -a --format '{{.Names}}' | grep -Eq '^${CONTAINER_NAME}\$'; then
+                        ssh -o StrictHostKeyChecking=no ubuntu@${env.EC2_HOST} << EOF
+                            echo '🛑 Checking for existing container named ${env.CONTAINER_NAME}...'
+                            if docker ps -a --format '{{.Names}}' | grep -Eq '^${env.CONTAINER_NAME}\$'; then
                                 echo '🔍 Found existing container. Removing it...'
-                                docker stop ${CONTAINER_NAME}
-                                docker rm ${CONTAINER_NAME}
+                                docker stop ${env.CONTAINER_NAME}
+                                docker rm ${env.CONTAINER_NAME}
                                 echo '✅ Old container removed.'
                             else
-                                echo '✅ No existing container with name ${CONTAINER_NAME}.'
+                                echo '✅ No existing container with name ${env.CONTAINER_NAME}.'
                             fi
 
                             echo '⬇️ Pulling latest image...'
-                            docker pull ${IMAGE_NAME}
+                            docker pull ${env.IMAGE_NAME}
 
                             echo '🚀 Running new container...'
-                            docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:80 ${IMAGE_NAME}
+                            docker run -d --name ${env.CONTAINER_NAME} -p ${env.HOST_PORT}:80 ${env.IMAGE_NAME}
 
                             echo '✅ Deployment complete!'
 EOF
