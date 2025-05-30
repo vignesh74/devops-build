@@ -21,7 +21,7 @@ ssh -o ConnectTimeout=10 -i "$SSH_KEY_PATH" "$SSH_USER@$SERVER_IP" bash -s << 'E
   echo "🧹 Stopping existing containers (if any)..."
   docker compose down || true
 
-  echo "🚀 Starting containers using docker-compose..."
+  echo "🚀 Starting containers using docker-compose......"
   docker compose up -d
 
   echo "✅ Docker Compose deployment complete!"
