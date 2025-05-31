@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-SERVER_IP="13.233.111.213"
+SERVER_IP="13.233.247.23"
 SSH_USER="ubuntu"
 SSH_KEY_PATH="$SSH_KEY"
 DOCKER_COMPOSE_PATH="/home/ubuntu/docker-compose.yml"
