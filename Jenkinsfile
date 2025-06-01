@@ -10,7 +10,12 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${env.BRANCH_NAME}"]],
+                    userRemoteConfigs: [[url: 'https://github.com/vignesh74/devops-build.git']],
+                    extensions: [[$class: 'CloneOption', noTags: false, shallow: false, depth: 0]]
+                ])
             }
         }
 
@@ -34,6 +39,15 @@ pipeline {
                     🌐 Host Port: ${env.HOST_PORT}
                     📡 EC2 Host: ${env.EC2_HOST}
                     """
+                }
+            }
+        }
+
+        stage('Show Commit Message') {
+            steps {
+                script {
+                    def commitMessage = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                    echo "📨 Latest Commit Message: ${commitMessage}"
                 }
             }
         }
