@@ -2,10 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS_ID = 'vigourousvigDocker'  
-        SSH_CREDENTIALS_ID = 'vigourousvigSSH'           
-        HOST_PORT = "80"
-        EC2_HOST = "13.233.247.23"
+        DOCKER_HUB_CREDENTIALS_ID = 'vigourousvigDocker'
+        SSH_CREDENTIALS_ID = 'vigourousvigSSH'
+        EC2_HOST = "3.110.182.131"
     }
 
     stages {
@@ -15,11 +14,18 @@ pipeline {
             }
         }
 
-        stage('Set Variables') {
+        stage('Set Environment Variables') {
             steps {
                 script {
-                    env.IMAGE_NAME = (env.BRANCH_NAME == 'master') ? 'vigourousvig/prod:prod' : 'vigourousvig/dev:dev'
-                    env.CONTAINER_NAME = (env.BRANCH_NAME == 'master') ? 'react-prod' : 'react-dev'
+                    if (env.BRANCH_NAME == 'master') {
+                        env.IMAGE_NAME = 'vigourousvig/prod:prod'
+                        env.CONTAINER_NAME = 'react-prod'
+                        env.HOST_PORT = '80'
+                    } else {
+                        env.IMAGE_NAME = 'vigourousvig/dev:dev'
+                        env.CONTAINER_NAME = 'react-dev'
+                        env.HOST_PORT = '3001'
+                    }
 
                     echo """
                     🔧 Branch: ${env.BRANCH_NAME}
@@ -87,11 +93,11 @@ EOF
     }
 
     post {
-        failure {
-            echo "❌ Deployment failed for branch: ${env.BRANCH_NAME}"
-        }
         success {
-            echo "✅ Deployment succeeded for branch: ${env.BRANCH_NAME}"
+            echo "✅ Successfully deployed ${env.CONTAINER_NAME} on branch ${env.BRANCH_NAME}"
+        }
+        failure {
+            echo "❌ Deployment failed on branch ${env.BRANCH_NAME}"
         }
     }
 }
