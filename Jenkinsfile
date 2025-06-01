@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS_ID = 'vigourousvigDocker'
-        SSH_CREDENTIALS_ID = 'vigourousvigSSH'
-        EC2_HOST = "3.110.182.131"
+        DOCKER_HUB_CREDENTIALS_ID = 'vigourousvigDocker'  // just the ID string here
+        SSH_CREDENTIALS_ID = 'vigourousvigSSH'            // just the ID string here
+        EC2_HOST = "3.6.86.248"
     }
 
     stages {
